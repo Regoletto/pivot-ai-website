@@ -3,7 +3,7 @@ import { motion, useScroll, useTransform } from "motion/react";
 import { ArrowRight, Check, Compass, Layers, LineChart, MessagesSquare, Sparkles, Target } from "lucide-react";
 import ScrollReveal from "./components/ScrollReveal";
 
-const ASSET_VERSION = "20260530-mobile-video";
+const ASSET_VERSION = "20260530-mobile-scroll-video";
 const VIDEO_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero.mp4?v=${ASSET_VERSION}`;
 const POSTER_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero-poster.jpg?v=${ASSET_VERSION}`;
 const MOBILE_VIDEO_QUERY = "(max-width: 767px)";
@@ -133,6 +133,7 @@ export default function App() {
   const isEndLockedRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isMobileVideo, setIsMobileVideo] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
   const { scrollY } = useScroll();
   const headerY = useTransform(scrollY, [0, 500, 800], [0, 0, -150]);
 
@@ -148,15 +149,25 @@ export default function App() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
-    const handleVideoReady = () => setIsLoaded(true);
+    const syncVideoDuration = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        setVideoDuration(video.duration);
+      }
+    };
+    const handleVideoReady = () => {
+      syncVideoDuration();
+      setIsLoaded(true);
+    };
     const fallbackTimer = window.setTimeout(handleVideoReady, 2500);
     video.addEventListener("loadedmetadata", handleVideoReady);
+    video.addEventListener("durationchange", handleVideoReady);
     video.addEventListener("canplay", handleVideoReady);
     video.addEventListener("canplaythrough", handleVideoReady);
     video.load();
     return () => {
       window.clearTimeout(fallbackTimer);
       video.removeEventListener("loadedmetadata", handleVideoReady);
+      video.removeEventListener("durationchange", handleVideoReady);
       video.removeEventListener("canplay", handleVideoReady);
       video.removeEventListener("canplaythrough", handleVideoReady);
     };
@@ -167,9 +178,27 @@ export default function App() {
     if (!video) return;
 
     if (isMobileVideo) {
-      const playPromise = video.play();
-      if (playPromise) playPromise.catch(() => {});
-      return;
+      let isCancelled = false;
+      const warmVideo = async () => {
+        try {
+          await video.play();
+        } catch {
+          return;
+        }
+
+        if (isCancelled) return;
+        video.pause();
+        if (Number.isFinite(video.duration) && video.duration > 0) {
+          setVideoDuration(video.duration);
+        }
+        window.dispatchEvent(new Event("scroll"));
+      };
+
+      warmVideo();
+      return () => {
+        isCancelled = true;
+        video.pause();
+      };
     }
 
     video.pause();
@@ -177,17 +206,18 @@ export default function App() {
 
   useEffect(() => {
     if (!isLoaded) return undefined;
-    if (isMobileVideo) return undefined;
     const video = videoRef.current;
-    if (!video || !video.duration) return undefined;
+    const duration = videoDuration || video?.duration || 0;
+    if (!video || !Number.isFinite(duration) || duration <= 0) return undefined;
 
     const handleScroll = () => {
       if (!screen3Ref.current || video.seeking) return;
+      if (!video.paused) video.pause();
       const rect = screen3Ref.current.getBoundingClientRect();
       const absoluteTop = window.scrollY + rect.top;
       const stopScroll = Math.max(1, absoluteTop - window.innerHeight * 0.2);
       const scrollFraction = Math.max(0, Math.min(1, window.scrollY / stopScroll));
-      const finalFrameTime = Math.max(0, video.duration - 0.05);
+      const finalFrameTime = Math.max(0, duration - 0.05);
 
       if (scrollFraction >= 0.995) {
         if (!isEndLockedRef.current) {
@@ -208,7 +238,7 @@ export default function App() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isLoaded, isMobileVideo]);
+  }, [isLoaded, videoDuration]);
 
   return (
     <div id="top" className="min-h-screen overflow-x-hidden bg-black text-white">
@@ -230,8 +260,6 @@ export default function App() {
           muted
           playsInline
           preload="auto"
-          autoPlay={isMobileVideo}
-          loop={isMobileVideo}
           poster={POSTER_URL}
         >
           <source src={VIDEO_URL} type="video/mp4" />
