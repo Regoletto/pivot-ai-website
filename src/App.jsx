@@ -3,8 +3,9 @@ import { motion, useScroll, useTransform } from "motion/react";
 import { ArrowRight, Check, Compass, Layers, LineChart, MessagesSquare, Sparkles, Target } from "lucide-react";
 import ScrollReveal from "./components/ScrollReveal";
 
-const VIDEO_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero.mp4`;
-const POSTER_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero-poster.jpg`;
+const ASSET_VERSION = "20260530-mobile-video";
+const VIDEO_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero.mp4?v=${ASSET_VERSION}`;
+const POSTER_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero-poster.jpg?v=${ASSET_VERSION}`;
 const MOBILE_VIDEO_QUERY = "(max-width: 767px)";
 
 function Reveal({ children, delay = 0, className = "" }) {
