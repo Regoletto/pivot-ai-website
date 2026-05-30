@@ -4,6 +4,8 @@ import { ArrowRight, Check, Compass, Layers, LineChart, MessagesSquare, Sparkles
 import ScrollReveal from "./components/ScrollReveal";
 
 const VIDEO_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero.mp4`;
+const POSTER_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero-poster.jpg`;
+const MOBILE_VIDEO_QUERY = "(max-width: 767px)";
 
 function Reveal({ children, delay = 0, className = "" }) {
   return (
@@ -129,8 +131,18 @@ export default function App() {
   const lastVideoTimeRef = useRef(0);
   const isEndLockedRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isMobileVideo, setIsMobileVideo] = useState(false);
   const { scrollY } = useScroll();
   const headerY = useTransform(scrollY, [0, 500, 800], [0, 0, -150]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_VIDEO_QUERY);
+    const syncMobileVideo = () => setIsMobileVideo(mediaQuery.matches);
+
+    syncMobileVideo();
+    mediaQuery.addEventListener("change", syncMobileVideo);
+    return () => mediaQuery.removeEventListener("change", syncMobileVideo);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -150,7 +162,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isMobileVideo) {
+      const playPromise = video.play();
+      if (playPromise) playPromise.catch(() => {});
+      return;
+    }
+
+    video.pause();
+  }, [isMobileVideo]);
+
+  useEffect(() => {
     if (!isLoaded) return undefined;
+    if (isMobileVideo) return undefined;
     const video = videoRef.current;
     if (!video || !video.duration) return undefined;
 
@@ -181,7 +207,7 @@ export default function App() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isLoaded]);
+  }, [isLoaded, isMobileVideo]);
 
   return (
     <div id="top" className="min-h-screen overflow-x-hidden bg-black text-white">
@@ -203,6 +229,9 @@ export default function App() {
           muted
           playsInline
           preload="auto"
+          autoPlay={isMobileVideo}
+          loop={isMobileVideo}
+          poster={POSTER_URL}
         >
           <source src={VIDEO_URL} type="video/mp4" />
         </video>
