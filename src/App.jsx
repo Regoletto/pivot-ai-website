@@ -3,10 +3,13 @@ import { motion, useScroll, useTransform } from "motion/react";
 import { ArrowRight, Check, Compass, Layers, LineChart, MessagesSquare, Sparkles, Target } from "lucide-react";
 import ScrollReveal from "./components/ScrollReveal";
 
-const ASSET_VERSION = "20260530-mobile-scroll-video";
+const ASSET_VERSION = "20260530-iphone-frame-scroll";
 const VIDEO_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero.mp4?v=${ASSET_VERSION}`;
 const POSTER_URL = `${import.meta.env.BASE_URL}assets/ai-adoption-hero-poster.jpg?v=${ASSET_VERSION}`;
 const MOBILE_VIDEO_QUERY = "(max-width: 767px)";
+const MOBILE_FRAME_COUNT = 80;
+const getMobileFrameUrl = (index) =>
+  `${import.meta.env.BASE_URL}assets/hero-frames/frame-${String(index + 1).padStart(3, "0")}.jpg?v=${ASSET_VERSION}`;
 
 function Reveal({ children, delay = 0, className = "" }) {
   return (
@@ -133,6 +136,7 @@ export default function App() {
   const isEndLockedRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isMobileVideo, setIsMobileVideo] = useState(false);
+  const [mobileFrameIndex, setMobileFrameIndex] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const { scrollY } = useScroll();
   const headerY = useTransform(scrollY, [0, 500, 800], [0, 0, -150]);
@@ -174,49 +178,50 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    if (!isMobileVideo) return undefined;
 
-    if (isMobileVideo) {
-      let isCancelled = false;
-      const warmVideo = async () => {
-        try {
-          await video.play();
-        } catch {
-          return;
-        }
+    let isCancelled = false;
+    const firstFrame = new Image();
+    firstFrame.onload = () => {
+      if (!isCancelled) setIsLoaded(true);
+    };
+    firstFrame.src = getMobileFrameUrl(0);
 
-        if (isCancelled) return;
-        video.pause();
-        if (Number.isFinite(video.duration) && video.duration > 0) {
-          setVideoDuration(video.duration);
-        }
-        window.dispatchEvent(new Event("scroll"));
-      };
+    const preloadTimer = window.setTimeout(() => {
+      for (let index = 1; index < MOBILE_FRAME_COUNT; index += 1) {
+        const image = new Image();
+        image.src = getMobileFrameUrl(index);
+      }
+    }, 300);
 
-      warmVideo();
-      return () => {
-        isCancelled = true;
-        video.pause();
-      };
-    }
-
-    video.pause();
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(preloadTimer);
+    };
   }, [isMobileVideo]);
 
   useEffect(() => {
     if (!isLoaded) return undefined;
     const video = videoRef.current;
     const duration = videoDuration || video?.duration || 0;
-    if (!video || !Number.isFinite(duration) || duration <= 0) return undefined;
+    if (!screen3Ref.current) return undefined;
+    if (!isMobileVideo && (!video || !Number.isFinite(duration) || duration <= 0)) return undefined;
 
     const handleScroll = () => {
-      if (!screen3Ref.current || video.seeking) return;
-      if (!video.paused) video.pause();
+      if (!screen3Ref.current) return;
       const rect = screen3Ref.current.getBoundingClientRect();
       const absoluteTop = window.scrollY + rect.top;
       const stopScroll = Math.max(1, absoluteTop - window.innerHeight * 0.2);
       const scrollFraction = Math.max(0, Math.min(1, window.scrollY / stopScroll));
+
+      if (isMobileVideo) {
+        const frameIndex = Math.round(scrollFraction * (MOBILE_FRAME_COUNT - 1));
+        setMobileFrameIndex((currentIndex) => (currentIndex === frameIndex ? currentIndex : frameIndex));
+        return;
+      }
+
+      if (!video || video.seeking) return;
+      if (!video.paused) video.pause();
       const finalFrameTime = Math.max(0, duration - 0.05);
 
       if (scrollFraction >= 0.995) {
@@ -238,7 +243,7 @@ export default function App() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isLoaded, videoDuration]);
+  }, [isLoaded, isMobileVideo, videoDuration]);
 
   return (
     <div id="top" className="min-h-screen overflow-x-hidden bg-black text-white">
@@ -256,7 +261,9 @@ export default function App() {
       <div className="fixed inset-0 z-0 overflow-hidden bg-black">
         <video
           ref={videoRef}
-          className="absolute left-1/2 top-1/2 min-h-full min-w-full -translate-x-1/2 -translate-y-1/2 object-cover opacity-74"
+          className={`absolute left-1/2 top-1/2 min-h-full min-w-full -translate-x-1/2 -translate-y-1/2 object-cover opacity-74 ${
+            isMobileVideo ? "hidden" : "block"
+          }`}
           muted
           playsInline
           preload="auto"
@@ -264,6 +271,15 @@ export default function App() {
         >
           <source src={VIDEO_URL} type="video/mp4" />
         </video>
+        {isMobileVideo && (
+          <img
+            className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 object-cover opacity-74"
+            src={getMobileFrameUrl(mobileFrameIndex)}
+            alt=""
+            aria-hidden="true"
+            draggable="false"
+          />
+        )}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_12%,rgba(255,255,255,0.18),transparent_24%),linear-gradient(90deg,rgba(0,0,0,0.78),rgba(0,0,0,0.36)_48%,rgba(0,0,0,0.7))]" />
         <div className="grain-overlay absolute inset-0 opacity-70" />
       </div>
