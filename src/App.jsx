@@ -135,10 +135,18 @@ export default function App() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
-    const handleCanPlay = () => setIsLoaded(true);
-    video.addEventListener("canplaythrough", handleCanPlay);
+    const handleVideoReady = () => setIsLoaded(true);
+    const fallbackTimer = window.setTimeout(handleVideoReady, 2500);
+    video.addEventListener("loadedmetadata", handleVideoReady);
+    video.addEventListener("canplay", handleVideoReady);
+    video.addEventListener("canplaythrough", handleVideoReady);
     video.load();
-    return () => video.removeEventListener("canplaythrough", handleCanPlay);
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      video.removeEventListener("loadedmetadata", handleVideoReady);
+      video.removeEventListener("canplay", handleVideoReady);
+      video.removeEventListener("canplaythrough", handleVideoReady);
+    };
   }, []);
 
   useEffect(() => {
